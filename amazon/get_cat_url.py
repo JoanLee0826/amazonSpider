@@ -107,9 +107,9 @@ class BSE:
                 print("get_thr")
                 print(thr_title, "四级类目")
                 print(thr_url)
-                # self.thr_list.append((abs_title, abs_url, fir_title, fir_url, sec_title, sec_url, thr_title, thr_url))
                 self.thr_queue.put((abs_title, abs_url, fir_title, fir_url, sec_title, sec_url, thr_title, thr_url))
-                # print(len(self.last_list), self.last_list[-1][-2:])
+                self.thr_list.append((abs_title, abs_url, fir_title, fir_url, sec_title, sec_url, thr_title, thr_url))
+                print(len(self.last_list), self.last_list[-1][-2:])
 
         else:
             self.last_list.append((abs_title, abs_url, fir_title, fir_url, sec_title, sec_url))
@@ -194,5 +194,5 @@ if __name__ == '__main__':
 
     bse = BSE()
     aft = datetime.datetime.now().strftime('%m%d%H%M')
-    file_name = r'../data/category/amazon_category' + aft + '.xlsx'
+    file_name = r'../data/category/amazon_category_' + aft + '.xlsx'
     bse.run().to_excel(file_name, encoding='utf-8', engine='xlsxwriter')
