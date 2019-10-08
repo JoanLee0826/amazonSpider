@@ -1,11 +1,12 @@
 import numpy as np
 import pandas as pd
-import requests, lxml
+import requests
 from lxml import etree
 import re, time, random, datetime
-import pymysql, threading, queue
-from threading import Lock
+import threading, queue
+import json
 import os
+
 
 class GoodDetail:
     head_user_agent = ['Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko',
@@ -47,8 +48,10 @@ class GoodDetail:
         self.detail_list = []
         self.rank_list = []
         self.sec_list = []
+        self.error_list = []
         self.begin = 0
         self.url_queue = queue.Queue()
+
 
     def get_detail(self, url):
         import re
@@ -79,7 +82,8 @@ class GoodDetail:
             print("try again")
             self.begin += 1
             if self.begin >= 5:
-                print('该链接:' + url + '访问出错次数超过5次,可能该链接下没有同类商品内容')
+                print('该链接:' + url + '访问出错次数超过5次,可能该链接下没有同类商品内容,或爬虫IP受限，请手动核实添加')
+                self.error_list.append(url)
                 return
             self.get_detail(url)
 
@@ -302,8 +306,7 @@ class GoodDetail:
         # 评价星级
         try:
 
-            goods_review_star = res_html.xpath('//div[@id="averageCustomerReviews"]//span[@class="a-icon-alt"]/text()')[
-                0]
+            goods_review_star = res_html.xpath('//div[@id="averageCustomerReviews"]//span[@class="a-icon-alt"]/text()')[0]
             goods_review_star = float(goods_review_star.split(" ")[0])
         except:
             goods_review_star = None
@@ -317,7 +320,6 @@ class GoodDetail:
         except:
             goods_price = None
 
-        import json
         try:
             brand = res_html.xpath('//a[@id="bylineInfo"]/text()')[0]
         except:
@@ -350,7 +352,7 @@ class GoodDetail:
 
         sales_est = None
 
-        # 销量修正，实际反馈发现，销量预测头部偏高，中部偏低，做出微调
+        # 销量修正，实际反馈发现，销量预测头部偏高，中部偏低，做出微调，仅供参考
         if category_main and rank_main:
             try:
                 sales_est = int(get_sales(cate=category_main, rank=rank_main))
@@ -366,21 +368,22 @@ class GoodDetail:
                 pass
 
         each_detail_list = (
-        goods_pic_url, goods_title, ASIN, brand, ad_plus, goods_price, choose_kind, seller, seller_cls,
-        rank_in_HK, date_on_shelf, stockOnHand, goods_review_count, product_dimensions, package_dimensions,
-        product_weight, ship_weight, goods_review_star, category_main, rank_main, sales_est, high_fre_words, multi_asin,
-        goods_each_ranks)
+            goods_pic_url, goods_title, ASIN, brand, ad_plus, goods_price, choose_kind, seller, seller_cls,
+            rank_in_HK, date_on_shelf, stockOnHand, goods_review_count, product_dimensions, package_dimensions,
+            product_weight, ship_weight, goods_review_star, category_main, rank_main, sales_est, high_fre_words,
+            multi_asin, goods_each_ranks
+            )
 
         if goods_title:
             self.detail_list.append(each_detail_list)
 
     def run(self, data_path):
         data = pd.read_excel(data_file, encoding='utf-8')
-        for asin in data['ASIN'][50:]:
+        for asin in data['ASIN'][396:421]:
             if asin:
                 url = "https://www.amazon.com/dp/" + str(asin)
                 self.url_queue.put(url)
-                print(self.url_queue.qsize())
+        print(self.url_queue.qsize())
 
         while True:
             try:
@@ -427,19 +430,21 @@ class GoodDetail:
         file_name_new = "../data/goods_detail/" + aft + "_with_ad.xlsx"
         details_pd.to_excel(file_name_new, encoding='utf-8')
 
+        # 最后打印下未能正确放回数据的链接 可能是因为该商品已经下假 或者爬虫访问次数过多，IP被限制
+        for each in self.error_list:
+            if each:
+                print('该链接{}未能正确返回数据'.format(each))
+
 
 def weight_handle(weight):
-    # 把kg ounce pound 都转化为数字存储
+    # 把kg ounce pound 都转化为克重数字存储
     weight = weight.lower().replace(',', '')
     if re.search("kg", weight):
         weight_int = float(weight.split(' ')[0]) * 1000
-
     elif re.search("ounce", weight):
         weight_int = float(weight.split(' ')[0]) * 28.35
-
     elif re.search("pound", weight):
         weight_int = float(weight.split(' ')[0]) * 453.60
-
     else:
         try:
             weight_int = float(weight.split(' ')[0])
@@ -467,66 +472,42 @@ def seller_handle(seller):
         else:
             return 'FBM'
 
+
 def get_sales(rank, cate="Home & Kitchen"):
+
+    # 根据 amzscount算法接口，基于类目排名进行销量预估
     import requests
     import urllib
-
     s = requests.Session()
-    proxies = {
-        "http": "http://180.118.247.88:9000"
-    }
     row_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36",
     }
-    raw_url = "https://amzscout.net/"
+    sales_url = "https://amzscout.net/extensions/scoutlite/v1/sales?"
+    full_url = sales_url + "domain=COM&category="+ urllib.parse.quote(cate)+ "&rank=" + str(rank)
+    print(full_url)
     s.headers.update(row_headers)
-    s.get(raw_url, proxies=proxies)
-
-    # 销量预测接口，返回根据类目排名得到的销量预测，仅供参考
-    test_header ={
-        "Host": "amzscout.net",
-        "Connection": "keep-alive",
-        "Origin": "https://amzscout.net",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36",
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "*/*",
-        "Referer": "https://amzscout.net/sales-estimator/",
-    }
-    test_url = "https://amzscout.net/analytics/v1/events"
-    data = 'category=Estimator&action=search&software=LANDING'
-    s.headers.update(test_header)
-    s.post(url=test_url, headers=test_header, data=data, proxies=proxies)
-
-    url = "https://amzscout.net/estimator/v1/sales?domain=COM&category=" + urllib.parse.quote(cate)+ "&rank=" + str(rank)
-    ams_headers = {
-        "Host": "amzscout.net",
-        "Connection":"keep-alive",
-        "Cache-Control":"max-age=0",
-        "Upgrade-Insecure-Requests":"1",
-        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36",
-        "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
-    }
+    res = s.get(full_url)
     try:
-        s.headers.update(ams_headers)
-        res = s.get(url, headers=ams_headers)
         return res.json().get('sales')
     except:
         return None
+
 
 def pic_save(base_code, ASIN):
 
     import base64
     img_data = base64.b64decode(base_code)
-    file = open(r"..\data\pic\\" + str(ASIN) + '.jpg', 'wb')
+    if not os.path.exists(r'../data/pic/'):
+        os.makedirs(r'../data/pic/')
+    file = open(r"../data/pic/" + str(ASIN) + '.jpg', 'wb')
     file.write(img_data)
     file.close()
-
-
 
 
 if __name__ == '__main__':
 
     goods_detail = GoodDetail()
-    data_file = r"../data/category/Women's Crossbody Handbags_07_19.xlsx"
-
+    data_file = r"../data/category/outdoor_recreation_top10000.xlsx"
     goods_detail.run(data_file)
+
+
