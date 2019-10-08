@@ -45,50 +45,22 @@ def seller_handle(seller):
         else:
             return 'FBM'
 
+
 def get_sales(rank, cate="Home & Kitchen"):
+
+    # 根据 amzscount算法接口，基于类目排名进行销量预估
     import requests
     import urllib
-
     s = requests.Session()
-    proxies = {
-        "http": "http://180.118.247.88:9000"
-    }
     row_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36",
     }
-    raw_url = "https://amzscout.net/"
-    s.get(raw_url, headers=row_headers, proxies=proxies)
-
-    # 销量预测接口，返回根据类目排名得到的销量预测，仅供参考
-    test_header ={
-        "Host": "amzscout.net",
-        "Connection": "keep-alive",
-        "Content-Length": "49",
-        "Origin": "https://amzscout.net",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36",
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "*/*",
-        "Referer": "https://amzscout.net/sales-estimator/",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "zh-CN,zh;q=0.9",
-    }
-    test_url = "https://amzscout.net/analytics/v1/events"
-    data = 'category=Estimator&action=search&software=LANDING'
-    s.post(url=test_url, headers=test_header, data=data, proxies=proxies)
-
-    url = "https://amzscout.net/estimator/v1/sales?domain=COM&category=" + urllib.parse.quote(cate)+ "&rank=" + str(rank)
-    ams_headers = {
-        "Host": "amzscout.net",
-        "Connection":"keep-alive",
-        "Cache-Control":"max-age=0",
-        "Upgrade-Insecure-Requests":"1",
-        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36",
-        "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3",
-        "Accept-Encoding":"gzip, deflate, br",
-        "Accept-Language":"zh-CN,zh;q=0.9",
-    }
+    sales_url = "https://amzscout.net/extensions/scoutlite/v1/sales?"
+    full_url = sales_url + "domain=COM&category="+ urllib.parse.quote(cate)+ "&rank=" + str(rank)
+    print(full_url)
+    s.headers.update(row_headers)
+    res = s.get(full_url)
     try:
-        res = s.get(url, headers=ams_headers)
         return res.json().get('sales')
     except:
         return None
@@ -96,7 +68,6 @@ def get_sales(rank, cate="Home & Kitchen"):
 
 class GoodDetail:
     headers = {
-        # "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.81 Safari/537.36"
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0"
     }
 
@@ -413,21 +384,23 @@ class GoodDetail:
         except:
             seller_cls = None
 
-        sales_est = None
-        
         # 销量修正，实际反馈发现，销量预测头部偏高，中部偏低，做出微调
+        # 基于类目排名的销量预测，用时间点来计算计算时间段，不准确，虽然平均排名似乎能解决问题
+        # 但同时因为无法识别ASIN合并分割等带来的问题，仅仅作为粗略参考，或者相对比较。
+        sales_est = None
         if category_main and rank_main:
             try:
                 sales_est = int(get_sales(cate=category_main, rank=rank_main))
-                if sales_est >= 2000:
-                    sales_est = int(sales_est*0.9)
-                elif sales_est >= 1000:
-                    sales_est = int(sales_est*1.25)
-                else:
-                    sales_est = int(sales_est*1.5)
-                time.sleep(1)
-                print("sales:",sales_est)
+                # if sales_est >= 2000:
+                #     sales_est = int(sales_est*0.9)
+                # elif sales_est >= 1000:
+                #     sales_est = int(sales_est*1.25)
+                # else:
+                #     sales_est = int(sales_est*1.5)
+                # time.sleep(1)
+                print("sales:", sales_est)
             except:
+                print('{}{}排名处未能正确返回销量，如果持续出现请测试销量预测接口功能'.format(category_main, rank_main))
                 pass
 
         each_detail_list = (goods_pic_url,goods_title, ASIN, brand, ad_plus, goods_price, choose_kind, seller, seller_cls,
@@ -437,8 +410,7 @@ class GoodDetail:
         if goods_title:
             self.detail_list.append(each_detail_list)
 
-
-        # 写入数据库 
+        # 写入数据库, 比较糙，别见怪
         if ASIN:
             # try:
             cs = self.conn.cursor()
@@ -487,6 +459,7 @@ def pic_save(base_code, ASIN):
         file.write(img_data)
         file.close()
 
+
 if __name__ == '__main__':
 
     goods_detail = GoodDetail()
@@ -502,13 +475,13 @@ if __name__ == '__main__':
     #         time.sleep(random.uniform(1.2,2.5))
 
     data = pd.read_excel(data_file, encoding='utf-8')
-    for ASIN in data['ASIN'][:51]:
 
+    for ASIN in data['ASIN']:
         if ASIN:
             url = "https://www.amazon.com/dp/" + str(ASIN)
             print(url)
             goods_detail.get_detail(url)
-            time.sleep(random.uniform(1.2,2.5))
+            time.sleep(random.uniform(1.2, 2.5))
 
     details_pd = pd.DataFrame(goods_detail.detail_list,
                               columns=['goods_pic_url', 'goods_title', 'ASIN', 'brand', 'ad_plus', 'goods_price',
@@ -523,16 +496,25 @@ if __name__ == '__main__':
             if base_code_full:
                 base_code = base_code_full.split(',')[1]
                 pic_save(base_code, ASIN)
+            else:
+                print("{}对应的图片格式非常规base64形式，图片保存出错".format(ASIN))
         except:
-            print("保存图片出错")
+            pass
 
     time.sleep(3)
 
     # abs_path为项目的跟路径，相当于域
     abs_path = os.path.abspath('../')
-    details_pd['pic_url'] = abs_path + r"\data\pic\\" +  details_pd['ASIN'] + ".jpg"
-    details_pd['pic_table_url'] = '<table> <img src=' + '\"' +details_pd['pic_url'] + '\"' +'height="140" >'
+    details_pd['pic_url'] = abs_path + r"\data\pic\\" + details_pd['ASIN'] + ".jpg"
+
+    # 添加适用于Excel快速填充图片的辅助列，无其他处理作用
+    details_pd['pic_table_url'] = '<table> <img src=' + '\"' + details_pd['pic_url'] + '\"' + 'height="140" >'
     file_name_new = r"..\data\goods_detail\\" + aft + "_with_ad.xlsx"
-    last_pd = pd.concat([details_pd, ranks_pd],axis=1)
+    last_pd = pd.concat([details_pd, ranks_pd], axis=1)
+
+    # 删除排名相同的商品
     last_pd.drop_duplicates(subset=['category_main','rank_main'], inplace=True)
+
+    # engine选择xlsxwriter可以解决Excel表格单个表格内字符串长度限制问题，不添加，base64图片值这一列无法输出到Excel中，它太长了
     last_pd.to_excel(file_name_new,  encoding='utf-8', engine='xlsxwriter')
+
