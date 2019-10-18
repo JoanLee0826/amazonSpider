@@ -41,9 +41,10 @@ class GoodDetail:
     url_base = "https://www.amazon.com"
 
     s = requests.Session()
-    s.headers.update({'User-Agent':random.choice(head_user_agent)})
+    s.headers.update({'User-Agent': random.choice(head_user_agent)})
     s.get(url=url_base, headers=headers, verify=False)
     print(s.headers.get('User-Agent'))
+
     def __init__(self):
         self.detail_list = []
         self.rank_list = []
@@ -51,7 +52,6 @@ class GoodDetail:
         self.error_list = []
         self.begin = 0
         self.url_queue = queue.Queue()
-
 
     def get_detail(self, url):
         import re
@@ -149,9 +149,7 @@ class GoodDetail:
             print("model-1")
             for each in res_html.xpath('//div[@id="detailBullets_feature_div"]/ul/li'):
                 key = each.xpath('.//span/span[1]/text()')
-                # print(key)
                 value = each.xpath('.//span/span[2]/text()')
-                # print(value)
                 if key and value:
                     key = key[0].replace("\n", '').replace("\t", '').strip(": (")
                     value = value[0].replace("\n", '').replace("\t", '').strip(": (")
@@ -163,9 +161,7 @@ class GoodDetail:
             print("model-2")
             for each in res_html.xpath("//div[@class='a-section table-padding']/table//tr"):
                 key = each.xpath("string(.//th)")
-                # print(key, "---")
                 value = each.xpath("string(.//td)")
-                #     print(key, value)
                 if key and value:
                     key = key.replace("\n", '').replace("\t", '').strip()
                     value = value.replace("\n", '').replace("\t", '').strip()
@@ -177,9 +173,7 @@ class GoodDetail:
             for each in res_html.xpath("//table[@id='productDetails_detailBullets_sections1']//tr"):
                 # print("model1--in")
                 key = each.xpath("string(./th)")
-                # print(key, "---")
                 value = each.xpath("string(./td)")
-                # print(key, value)
                 if key and value:
                     key = key.replace("\n", '').replace("\t", '').strip()
                     value = value.replace("\n", '').replace("\t", '').strip()
@@ -190,9 +184,7 @@ class GoodDetail:
             print("model-4")
             for each in res_html.xpath("//table[@id='productDetails_techSpec_section_1']//tr"):
                 key = each.xpath("string(.//th)")
-                # print(key, "---")
                 value = each.xpath("string(.//td)")
-                # print(key, value)
                 if key and value:
                     key = key.replace("\n", '').replace("\t", '').strip()
                     value = value.replace("\n", '').replace("\t", '').strip()
@@ -204,9 +196,7 @@ class GoodDetail:
             for each in res_html.xpath("////div[@class='wrapper USlocale']//tr"):
                 # print("model3--in")
                 key = each.xpath("string(.//td[@class='label'])")
-                # print(key, "---")
                 value = each.xpath("string(.//td[@class='value'])")
-                # print(key, "---", value)
                 if key and value:
                     key = key.replace("\n", '').replace("\t", '').strip()
                     value = value.replace("\n", '').replace("\t", '').strip()
@@ -297,8 +287,8 @@ class GoodDetail:
             print(category_main, rank_main)
         # 评价数量
         try:
-            goods_review_count = \
-            res_html.xpath('//div[@id="averageCustomerReviews"]//span[@id="acrCustomerReviewText"]/text()')[0]
+            goods_review_count = res_html.xpath('//div[@id="averageCustomerReviews"]'
+                                                '//span[@id="acrCustomerReviewText"]/text()')[0]
             goods_review_count = int(goods_review_count.split(" ")[0].replace(",", ""))
         except:
             goods_review_count = 0
@@ -306,7 +296,8 @@ class GoodDetail:
         # 评价星级
         try:
 
-            goods_review_star = res_html.xpath('//div[@id="averageCustomerReviews"]//span[@class="a-icon-alt"]/text()')[0]
+            goods_review_star = res_html.xpath('//div[@id="averageCustomerReviews"]'
+                                               '//span[@class="a-icon-alt"]/text()')[0]
             goods_review_star = float(goods_review_star.split(" ")[0])
         except:
             goods_review_star = None
@@ -332,16 +323,19 @@ class GoodDetail:
             stockOnHand = None
 
         # 卖方
+        # 如果在国内访问amzon默认的收件地址是中国，会出现类似“所在地区不可售”，找不到卖家。
+        # 尝试过用接口修改默认的收件地址，没有成功，用VPN代理访问，可解决
         try:
             seller = res_html.xpath('string(//div[@id="merchant-info"])')
-            seller = seller.replace("\n", "").split("Reviews")[0].strip()
             if not seller:
                 try:
                     seller = res_html.xpath('string(//span[@id="merchant-info"])')
-                    seller = seller.replace("\n", "").split("Reviews")[0].strip()
                 except:
                     seller = None
-
+            if re.search('Reviews', seller):
+                seller = seller.replace("\n", "").split("Reviews")[0].strip()
+            if re.search(r"P.when", seller):
+                seller = seller.replace("\n", "").split("P.when")[0].strip()
         except:
             seller = None
 
@@ -356,13 +350,13 @@ class GoodDetail:
         if category_main and rank_main:
             try:
                 sales_est = int(get_sales(cate=category_main, rank=rank_main))
-                if sales_est >= 2000:
-                    sales_est = int(sales_est * 0.9)
-                elif sales_est >= 1000:
-                    sales_est = int(sales_est * 1.25)
-                else:
-                    sales_est = int(sales_est * 1.5)
-                time.sleep(1)
+                # if sales_est >= 2000:
+                #     sales_est = int(sales_est * 0.9)
+                # elif sales_est >= 1000:
+                #     sales_est = int(sales_est * 1.25)
+                # else:
+                #     sales_est = int(sales_est * 1.5)
+                # time.sleep(1)
                 print("sales:", sales_est)
             except:
                 pass
@@ -379,7 +373,7 @@ class GoodDetail:
 
     def run(self, data_path):
         data = pd.read_excel(data_file, encoding='utf-8')
-        for asin in data['ASIN'][396:421]:
+        for asin in data['ASIN']:
             if asin:
                 url = "https://www.amazon.com/dp/" + str(asin)
                 self.url_queue.put(url)
@@ -407,10 +401,11 @@ class GoodDetail:
                 break
         details_pd = pd.DataFrame(goods_detail.detail_list,
                                   columns=['goods_pic_url', 'goods_title', 'ASIN', 'brand', 'ad_plus', 'goods_price',
-                                             'choose_kind', 'seller', 'seller_cls','rank_in_HK', 'date_on_shelf',
-                                           'stockOnHand', 'goods_review_count', 'product_dimensions', 'package_dimensions',
-                                           'product_weight', 'ship_weight', 'goods_review_star', 'category_main', 'rank_main',
-                                           'sales_est', 'high_fre_words','multi_asin','goods_each_ranks'])
+                                           'choose_kind', 'seller', 'seller_cls','rank_in_HK', 'date_on_shelf',
+                                           'stockOnHand', 'goods_review_count', 'product_dimensions',
+                                           'package_dimensions', 'product_weight', 'ship_weight', 'goods_review_star',
+                                           'category_main', 'rank_main','sales_est', 'high_fre_words','multi_asin',
+                                           'goods_each_ranks'])
 
         aft = datetime.datetime.now().strftime('%m%d%H%M')
 
@@ -483,7 +478,7 @@ def get_sales(rank, cate="Home & Kitchen"):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36",
     }
     sales_url = "https://amzscout.net/extensions/scoutlite/v1/sales?"
-    full_url = sales_url + "domain=COM&category="+ urllib.parse.quote(cate)+ "&rank=" + str(rank)
+    full_url = sales_url + "domain=COM&category=" + urllib.parse.quote(cate)+ "&rank=" + str(rank)
     print(full_url)
     s.headers.update(row_headers)
     res = s.get(full_url)
