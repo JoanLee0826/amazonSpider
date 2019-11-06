@@ -1,13 +1,24 @@
 import requests
 import pandas as pd
-import time, datetime
 from dateutil.parser import parse
 import urllib
 import json
 from jsonpath import jsonpath
+from selenium import webdriver
+import time, random, re, datetime
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as ec
+from selenium.webdriver.common.by import By
 
 KEEPA_KEY = '7sommorss711l4ci5f3n97ftgvcq8jm7tak3316h3a61jkifqq3qh3keebkm9rsl'  # keepa密钥
 domain = '1'  # 亚马逊的市场 美国为1
+chrome_opt = webdriver.ChromeOptions()
+prefs = {"profile.managed_default_content_settings.images": 2}  # 关闭图片，响应更快
+chrome_opt.add_experimental_option("prefs", prefs)
+driver = webdriver.Chrome(executable_path=r'E:\爬虫pycharm\others\chromedriver.exe', chrome_options=chrome_opt)
+chrome_opt.add_argument('--headless')
 
 def get_keepa_time(date):
     """
@@ -115,32 +126,121 @@ def get_asin():
     return data_pd
 
 
-def get_varies(ASIN):
-    asin_json = asin_info(ASIN)
+def get_varies(asin):
+    asin_info = get_asin_info(asin)
+    try:
+        variations = jsonpath(asin_info, '$..products[0].variations')[0]
+        parent_asin = jsonpath(asin_info, '$..products[0].parentAsin')[0]
+    except:
+        print("keepa 未返回ASIN数据信息")
+        return None
+    info_list = []
+    if not variations:
+        parent_info = get_asin_info(parent_asin)
+        variations = jsonpath(parent_info, '$..products[0].variations')[0]
 
-    variationCSV = jsonpath(asin_json, '$.products[0].variationCSV')
-    if variationCSV[0]:
-        return variationCSV
-    else:
-        parent_asin = jsonpath(asin_json, '$.products[0].parentAsin')[0]
-        print(parent_asin)
-        parent_info = asin_info(parent_asin)
-        return jsonpath(parent_info, '$.products[0].variationCSV')
+    for each_asin in variations:
+        asin = each_asin.get('asin', None)
+        stock, model = None, None
+        if get_stock(asin):
+            stock, model = get_stock(asin)
+        para_list = []
+        for each_para in each_asin.get('attributes'):
+            para_list.append(each_para.get('value'))
+            para = "-".join(para_list)
+            info_list.append((parent_asin, asin,  para, stock, model))
+    # print(info_list)
+    return info_list
 
-def asin_info(ASIN):
+
+def get_asin_info(ASIN):
     s = requests.Session()
     url = "https://api.keepa.com/product?key=" + KEEPA_KEY + "&domain=" + domain + "&update=-1" + "&asin=" + ASIN
     print(url)
     res_json = s.get(url).json()
-    if res_json.get('products'):
+    if res_json.get('products')[0]:
         # print(res_json)
         return res_json
     else:
         return None
 
 
-if __name__ == '__main__':
+def get_stock(asin):
+    def set_number(each, count=999):
+        each.click()
+        time.sleep(random.random())
+        each.send_keys(Keys.BACKSPACE)
+        each.send_keys(count)
+        time.sleep(random.random())
+        driver.find_element_by_xpath("//span[@class='a-button a-button-primary a-button-small sc-update-link']").click()
 
-    asin_list = ['B07QQ9WR8L']
-    for each in asin_list:
-        print(get_varies(each))
+    asin_url = "https://www.amazon.com/dp/" + asin
+    if not asin:
+        print("没有ASIN输入")
+        return None, None
+    try:
+        time.sleep(random.random())
+        driver.get(asin_url)
+        driver.set_page_load_timeout(15)
+    except:
+        print('打开链接失败')
+    time.sleep(random.uniform(1.5, 2))
+
+    try:
+        # WebDriverWait(driver, 超时时长, 调用频率, 忽略异常).until(可执行方法, 超时时返回的信息)
+        WebDriverWait(driver, 20, 0.5).until(ec.element_to_be_clickable((By.XPATH, "//input[@id='add-to-cart-button']")))
+        driver.find_element_by_xpath("//input[@id='add-to-cart-button']").click()
+        time.sleep(random.uniform(1, 2))
+    except:
+        print('加入购物车失败')
+        # get_stock(asin)
+
+    cart_url = 'https://www.amazon.com/gp/cart/view.html/'
+    driver.get(cart_url)
+    try:
+        driver.set_page_load_timeout(20)
+    except:
+        print('购物车打开失败')
+
+    ele_name = driver.find_elements_by_name("quantity")
+    for each in ele_name:
+        select = Select(each)
+        select.select_by_value('10')
+
+    text = driver.find_elements_by_name("quantityBox")
+    for each in text:
+        stock, model = None, None
+        set_number(each, 999)
+        time.sleep(random.uniform(2, 3))
+
+        while True:
+            try:
+                stock_value = driver.find_element_by_xpath("//input[@name='quantityBox']").get_attribute('value')
+                stock = stock_value
+                break
+            except:
+                time.sleep(0.5)
+        try:
+            model_check = driver.find_element_by_xpath("//div[@class='a-alert-content']/"
+                                                       "span[@class='a-size-base']").text
+            if re.search('available', model_check):
+                model = 'available'
+            if re.search('limit', model_check):
+                model = 'limit'
+        except:
+            pass
+        time.sleep(random.uniform(1.5, 2))
+
+        while True:
+            if driver.find_element_by_xpath("//input[@value='Delete']"):
+                time.sleep(random.random())
+                driver.find_element_by_xpath("//input[@value='Delete']").click()
+                break
+            else:
+                driver.refresh()
+                continue
+        return stock, model
+
+
+if __name__ == '__main__':
+    pass
