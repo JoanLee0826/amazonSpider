@@ -135,21 +135,25 @@ def get_varies(asin):
         print("keepa 未返回ASIN数据信息")
         return None
     info_list = []
+    if not parent_asin:
+        parent_asin = asin
     if not variations:
         parent_info = get_asin_info(parent_asin)
         variations = jsonpath(parent_info, '$..products[0].variations')[0]
-
     for each_asin in variations:
         asin = each_asin.get('asin', None)
-        stock, model = None, None
-        if get_stock(asin):
+        try:
             stock, model = get_stock(asin)
+        except:
+            print('{}请求失败'.format(asin))
+            stock, model = None, None
         para_list = []
+        para = ''
         for each_para in each_asin.get('attributes'):
             para_list.append(each_para.get('value'))
             para = "-".join(para_list)
-            info_list.append((parent_asin, asin,  para, stock, model))
-    # print(info_list)
+        info_list.append((parent_asin, asin,  para, stock, model))
+    print(info_list)
     return info_list
 
 
@@ -159,7 +163,6 @@ def get_asin_info(ASIN):
     print(url)
     res_json = s.get(url).json()
     if res_json.get('products')[0]:
-        # print(res_json)
         return res_json
     else:
         return None
@@ -212,14 +215,13 @@ def get_stock(asin):
         stock, model = None, None
         set_number(each, 999)
         time.sleep(random.uniform(2, 3))
-
-        while True:
-            try:
-                stock_value = driver.find_element_by_xpath("//input[@name='quantityBox']").get_attribute('value')
-                stock = stock_value
-                break
-            except:
-                time.sleep(0.5)
+        WebDriverWait(driver, 20, 0.5).until_not(
+            ec.element_to_be_clickable((By.XPATH, "//span[@class='a-button a-button-primary a-button-small sc-update-link']")))
+        try:
+            stock_value = driver.find_element_by_xpath("//input[@name='quantityBox']").get_attribute('value')
+            stock = stock_value
+        except:
+            pass
         try:
             model_check = driver.find_element_by_xpath("//div[@class='a-alert-content']/"
                                                        "span[@class='a-size-base']").text
@@ -232,15 +234,20 @@ def get_stock(asin):
         time.sleep(random.uniform(1.5, 2))
 
         while True:
-            if driver.find_element_by_xpath("//input[@value='Delete']"):
-                time.sleep(random.random())
-                driver.find_element_by_xpath("//input[@value='Delete']").click()
-                break
-            else:
-                driver.refresh()
-                continue
+            # try:
+            #     delete_click = driver.find_elements_by_xpath("//input[@value='Delete']")
+            try:
+                if driver.find_elements_by_xpath("//input[@value='Delete']"):
+                    time.sleep(random.random())
+                    driver.find_element_by_xpath("//input[@value='Delete']").click()
+                    driver.refresh()
+                    continue
+                else:
+                    break
+            except:
+                pass
         return stock, model
 
 
 if __name__ == '__main__':
-    pass
+    get_varies('B07ZRD63C7')

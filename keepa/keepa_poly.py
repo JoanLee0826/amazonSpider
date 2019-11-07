@@ -7,12 +7,12 @@ def stock_handle(file):
     stock_list = []
     # data = pd.read_excel(file)
     # asin_list = data['asin'].tolist()
-    asin_list = ['B07PY3SKY2']
+    asin_list = ['B07XFCX2Z5']
     for asin in asin_list:
         stock_list.extend(get_varies(asin))
         print(stock_list)
 
-    aft = "stock_" + datetime.datetime.now().strftime("%m%d%H%M")
+    aft = "./data/stock_" + datetime.datetime.now().strftime("%m%d%H%M")
     data_pd = pd.DataFrame(stock_list, columns=['parent_asin', 'asin', 'style', 'stock', 'model'])
     data_pd.drop_duplicates(subset=['asin'], inplace=True)
     data_pd.to_excel(aft + '.xlsx')

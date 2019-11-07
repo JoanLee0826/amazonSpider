@@ -104,12 +104,12 @@ cate_info = {
 
 
 def get_selection(
-        rank_in=8000,
-        rank_out=15000,
+        rank_in=5000,
+        rank_out=8000,
         review_count=60,
         date_in='2019-1-1',
         date_out='2019-9-15',
-        category=cate_info['Patio, Lawn & Garden']):  # category查上述字典
+        category=1055398):  # category查上述字典
 
     query_json = {
         "current_SALES_gte": rank_in,  # 最高排名
@@ -157,7 +157,8 @@ if __name__ == '__main__':
     # pd.DataFrame(items, columns=['ASIN']).to_excel(aft, encoding='utf-8', engine='xlsxwriter')
 
     # 从keepa请求获取asin
-    items = k_api.product_finder(get_selection(category=cate_info['Sports & Outdoors']))
+    category=cate_info['Home']
+    items = k_api.product_finder(get_selection())
 
     get_info(items=items)
 
