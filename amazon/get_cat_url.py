@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import requests
 from lxml import etree
@@ -6,7 +5,6 @@ import datetime, time, random
 from queue import Queue
 import threading
 import pymysql
-
 
 
 class BSE:
@@ -20,10 +18,6 @@ class BSE:
         "http": "http://49.86.181.43:9999",
     }
 
-    # 写入数据库 待完善
-    # db = pymysql.connect(host='localhost', port=3306, db='amazon_test',
-    #                      user='root', passwd='1118', charset='utf8')
-
     s = requests.Session()
     s.headers.update(headers)
     url_base = "https://www.amazon.com"
@@ -36,7 +30,6 @@ class BSE:
     thr_list = []
     last_list = []
 
-
     def del_ref(self, url):
         try:
             url = url.split('/ref')[0]
@@ -44,20 +37,32 @@ class BSE:
             pass
         return url
 
-    def get_raw(self):
+    # def get_raw(self):
+    #
+    #     raw_base_url = r'https://www.amazon.com/Best-Sellers/zgbs/'
+    #     raw_res = self.s.get(url=raw_base_url, headers=self.headers, proxies=self.proxies)
+    #     raw_html = etree.HTML(raw_res.text)
+    #
+    #     for each in raw_html.xpath('//*[@id="zg_browseRoot"]/ul/li')[-5:-4]:
+    #         title = each.xpath("./a/text()")[0]
+    #         url = each.xpath("./a/@href")[0]
+    #         url = self.del_ref(url)
+    #         print(title, '一级类目')
+    #         print(url)
+    #         self.raw_queue.put((title, url))
+    #         print('raw_list:', self.raw_queue.qsize())
 
-        raw_base_url = r'https://www.amazon.com/Best-Sellers/zgbs/'
-        raw_res = self.s.get(url=raw_base_url, headers=self.headers, proxies=self.proxies)
+    def get_raw(self, root_url):
+
+        raw_res = self.s.get(url=root_url, headers=self.headers, proxies=self.proxies)
         raw_html = etree.HTML(raw_res.text)
 
-        for each in raw_html.xpath('//*[@id="zg_browseRoot"]/ul/li')[-5:-4]:
-            title = each.xpath("./a/text()")[0]
-            url = each.xpath("./a/@href")[0]
-            url = self.del_ref(url)
-            print(title, '一级类目')
-            print(url)
-            self.raw_queue.put((title, url))
-            print('raw_list:',self.raw_queue.qsize())
+        try:
+            title = raw_html.xpath("//span[@class='category']/text()")[0]
+        except:
+            title = None
+        self.raw_queue.put((title, root_url))
+        print('raw_list:', self.raw_queue.qsize())
 
     def get_fir(self, abs_title, abs_url):
 
@@ -71,7 +76,7 @@ class BSE:
             print(fir_title, '二级类目')
             print(fir_url, "")
             self.fir_queue.put((abs_title, abs_url, fir_title, fir_url))
-            print('二级类目数据',self.fir_queue.qsize())
+            print('二级类目数据', self.fir_queue.qsize())
 
     def get_sec(self, abs_title, abs_url, fir_title, fir_url):
 
@@ -88,9 +93,9 @@ class BSE:
                 print(sec_url)
                 self.sec_queue.put((abs_title, abs_url, fir_title, fir_url, sec_title, sec_url))
         else:
+            print("三级类目分支")
             self.last_list.append((abs_title, abs_url, fir_title, fir_url))
             print(len(self.last_list), self.last_list[-1][-2:])
-
 
     def get_thr(self, abs_title, abs_url, fir_title, fir_url, sec_title, sec_url):
 
@@ -108,13 +113,13 @@ class BSE:
                 print(thr_title, "四级类目")
                 print(thr_url)
                 self.thr_queue.put((abs_title, abs_url, fir_title, fir_url, sec_title, sec_url, thr_title, thr_url))
-                self.thr_list.append((abs_title, abs_url, fir_title, fir_url, sec_title, sec_url, thr_title, thr_url))
+                self.last_list.append((abs_title, abs_url, fir_title, fir_url, sec_title, sec_url, thr_title, thr_url))
                 print(len(self.last_list), self.last_list[-1][-2:])
 
         else:
+            print("四级类目分支")
             self.last_list.append((abs_title, abs_url, fir_title, fir_url, sec_title, sec_url))
             print(len(self.last_list), self.last_list[-1][-2:])
-
 
     def get_last(self, abs_title, abs_url, fir_title, fir_url, sec_title, sec_url, thr_title, thr_url):
         inner_res = self.s.get(url=thr_url, headers=self.headers, proxies=self.proxies)
@@ -133,46 +138,45 @@ class BSE:
                                        last_title, last_url))
                 print(len(self.last_list), self.last_list[-1][-2:])
 
-    def run(self):
-
-        self.get_raw()
+    def run(self, root_url):
+        self.get_raw(root_url=root_url)
         print(self.raw_queue.qsize())
 
         while True:
 
-            fir_list = [threading.Thread(target=self.get_fir, args=(self.raw_queue.get())) for i in range(3)
+            fir_thread_list = [threading.Thread(target=self.get_fir, args=(self.raw_queue.get())) for i in range(3)
                         if not self.raw_queue.empty()]
 
-            for each in fir_list:
+            for each in fir_thread_list:
                 each.start()
-            for each in fir_list:
+            for each in fir_thread_list:
                 each.join()
             time.sleep(0.5)
 
-            sec_list = [threading.Thread(target=self.get_sec, args=(self.fir_queue.get())) for i in range(8)
+            sec_thread_list = [threading.Thread(target=self.get_sec, args=(self.fir_queue.get())) for i in range(8)
                         if not self.fir_queue.empty()]
 
-            for each in sec_list:
+            for each in sec_thread_list:
                 each.start()
-            for each in sec_list:
+            for each in sec_thread_list:
                 each.join()
             time.sleep(random.random())
 
-            thr_list = [threading.Thread(target=self.get_thr, args=(self.sec_queue.get())) for i in range(20)
+            thr_thread_list = [threading.Thread(target=self.get_thr, args=(self.sec_queue.get())) for i in range(20)
                         if not self.sec_queue.empty()]
 
-            for each in thr_list:
+            for each in thr_thread_list:
                 each.start()
-            for each in thr_list:
+            for each in thr_thread_list:
                 each.join()
             time.sleep(random.random())
 
-            final_list = [threading.Thread(target=self.get_last, args=(self.thr_queue.get())) for i in range(20)
-                        if not self.thr_queue.empty()]
+            final_thread_list = [threading.Thread(target=self.get_last, args=(self.thr_queue.get())) for i in range(20)
+                          if not self.thr_queue.empty()]
 
-            for each in final_list:
+            for each in final_thread_list:
                 each.start()
-            for each in final_list:
+            for each in final_thread_list:
                 each.join()
             time.sleep(random.random())
 
@@ -180,9 +184,9 @@ class BSE:
                 break
 
         try:
-            last_data = pd.DataFrame(self.last_list, columns=['类目名称','类目链接','二级类目','二级类目链接','三级类目',
-                                                          '三级类目链接','四级类目','四级类目链接','子类目','子类目链接'])
-            last_data.sort_values(by=['类目名称','二级类目','三级类目','四级类目','子类目'], ascending=True, inplace=True)
+            last_data = pd.DataFrame(self.last_list, columns=['类目名称', '类目链接', '二级类目', '二级类目链接', '三级类目',
+                                                              '三级类目链接', '四级类目', '四级类目链接', '子类目', '子类目链接'])
+            last_data.sort_values(by=['类目名称', '二级类目', '三级类目', '四级类目', '子类目'], ascending=True, inplace=True)
         except:
             last_data = pd.DataFrame(self.last_list)
         return last_data
@@ -191,8 +195,11 @@ class BSE:
 
 if __name__ == '__main__':
 
-
     bse = BSE()
     aft = datetime.datetime.now().strftime('%m%d%H%M')
     file_name = r'../data/category/amazon_category_' + aft + '.xlsx'
-    bse.run().to_excel(file_name, encoding='utf-8', engine='xlsxwriter')
+    root_url = 'https://www.amazon.com/Best-Sellers-Pet-Supplies/zgbs/pet-supplies/'
+    data = bse.run(root_url)
+    # 化简 去掉重复的值 只保留出现的第一个
+    data.bfill()
+    to_excel(file_name, encoding='utf-8', engine='xlsxwriter')
