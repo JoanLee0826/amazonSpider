@@ -200,6 +200,10 @@ if __name__ == '__main__':
     file_name = r'../data/category/amazon_category_' + aft + '.xlsx'
     root_url = 'https://www.amazon.com/Best-Sellers-Pet-Supplies/zgbs/pet-supplies/'
     data = bse.run(root_url)
-    # 化简 去掉重复的值 只保留出现的第一个
-    data.bfill()
-    to_excel(file_name, encoding='utf-8', engine='xlsxwriter')
+    # 化简 去掉各列中重复的值 只保留出现的第一个 耗时操作
+    # for each_column in data.columns:
+    #     for each in pd.DataFrame(data[each_column]).index:
+    #         if each not in pd.DataFrame(data[each_column]).drop_duplicates().index:
+    #             data[each_column][each] = None
+
+    data.to_excel(file_name, encoding='utf-8', engine='xlsxwriter')

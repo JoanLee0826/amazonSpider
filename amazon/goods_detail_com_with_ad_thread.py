@@ -41,6 +41,7 @@ class GoodDetail:
     url_base = "https://www.amazon.com"
 
     s = requests.Session()
+    # UA随机替换 当然 测试中 短时间内请求到500次附近时 还是会被IP屏蔽
     s.headers.update({'User-Agent': random.choice(head_user_agent)})
     s.get(url=url_base, headers=headers, verify=False)
     print(s.headers.get('User-Agent'))
@@ -386,6 +387,7 @@ class GoodDetail:
                 time.sleep(random.random())
 
                 for each in thread_list:
+                    self.s.headers.update({'User-Agent': random.choice(self.head_user_agent)})
                     try:
                         each.start()
                         print(each.name)
@@ -478,10 +480,10 @@ def get_sales(rank, cate="Home & Kitchen"):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36",
     }
     sales_url = "https://amzscout.net/extensions/scoutlite/v1/sales?"
-    full_url = sales_url + "domain=COM&category=" + urllib.parse.quote(cate)+ "&rank=" + str(rank)
+    full_url = sales_url + "domain=COM&category=" + urllib.parse.quote(cate) + "&rank=" + str(rank)
     print(full_url)
     s.headers.update(row_headers)
-    res = s.get(full_url)
+    res = s.get(full_url, timeout=10)
     try:
         return res.json().get('sales')
     except:

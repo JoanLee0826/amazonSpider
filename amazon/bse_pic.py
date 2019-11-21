@@ -4,7 +4,7 @@ from lxml import etree
 import re, time
 
 
-class BSR():
+class BSR:
     info_list = []
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
@@ -17,7 +17,7 @@ class BSR():
 
     url_base = "https://www.amazon.com"
     s = requests.Session()
-
+    s.headers.update(headers)
     s.get(url=url_base, headers=headers, proxies=proxies, verify=False)
 
     def parse(self, url):
@@ -36,7 +36,7 @@ class BSR():
                 rank_in = None
             try:
                 goods_url = each.xpath(".//a[@class='a-link-normal']/@href")[0]
-                goods_url= 'https://www.amazon.com' + goods_url
+                goods_url = 'https://www.amazon.com' + goods_url.split("ref")[0]
             except:
                 goods_url = None
 
@@ -47,7 +47,8 @@ class BSR():
                 ASIN = None
                 print("商品排名{}处: ASIN解析出错/该商品已下线".format(rank_in))
             try:
-                goods_review_count = int(each.xpath(".//a[@class='a-size-small a-link-normal']/text()")[0])
+                goods_review_str = each.xpath(".//a[@class='a-size-small a-link-normal']/text()")[0]
+                goods_review_count = int(goods_review_str.replace(',', ''))
             except:
                 goods_review_count = 0
             self.info_list.append((category, rank_in, ASIN, goods_url, goods_review_count))

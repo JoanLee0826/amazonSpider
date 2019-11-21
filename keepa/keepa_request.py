@@ -190,6 +190,15 @@ def get_stock(asin):
     time.sleep(random.uniform(1.5, 2))
 
     try:
+        is_stock = driver.find_element_by_id('availability').text
+        if re.search('Available', is_stock):
+            stock, model = None, 'another_seller'
+            print('{}该链接卖家状态不可售，存在其他卖家'.format(asin_url))
+            return stock, model
+    except:
+        pass
+
+    try:
         # WebDriverWait(driver, 超时时长, 调用频率, 忽略异常).until(可执行方法, 超时时返回的信息)
         WebDriverWait(driver, 20, 0.5).until(ec.element_to_be_clickable((By.XPATH, "//input[@id='add-to-cart-button']")))
         driver.find_element_by_xpath("//input[@id='add-to-cart-button']").click()

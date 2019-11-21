@@ -228,12 +228,10 @@ def pic_save(base_code, ASIN):
         file.write(img_data)
         file.close()
 
-if __name__ == '__main__':
 
-    # data_file = r'E:\爬虫pycharm\data\goods_rank_list\珪藻土 バスマット-07030931_with_ad.csv'
-    # data = pd.read_csv(data_file)
-    data_file = r'E:\产品开发\prime day 数据\终版\日本多类目数据.xlsx'
-    row_data= pd.read_excel(data_file)
+def main(data_file):
+
+    row_data = pd.read_excel(data_file)
 
     data = pd.DataFrame(row_data)
     data.drop_duplicates(subset=['asin'], inplace=True)
@@ -251,12 +249,12 @@ if __name__ == '__main__':
             print(url)
             # file_pic = r'E:\爬虫pycharm\data\pic\\' + asin + '.jpg'
             goods_detail.get_detail(url)
-            time.sleep(random.uniform(1.5,2.3))
+            time.sleep(random.uniform(1.5, 2.3))
 
     details_pd = pd.DataFrame(goods_detail.detail_list,
-                              columns=['title','goods_pic_url', 'ASIN', 'brand','is_ad', 'price', 'review_counts',
-                                       'review_starts', 'goods_ranks','product_dimensions', 'package_dimensions',
-                                       'product_weight','ship_weight', 'since_date', 'sort_ASIN'])
+                              columns=['title', 'goods_pic_url', 'ASIN', 'brand', 'is_ad', 'price', 'review_counts',
+                                       'review_starts', 'goods_ranks', 'product_dimensions', 'package_dimensions',
+                                       'product_weight', 'ship_weight', 'since_date', 'sort_ASIN'])
 
     aft = datetime.datetime.now().strftime('%m%d%H%M')
 
@@ -266,10 +264,14 @@ if __name__ == '__main__':
                 base_code = base_code_full.split(',')[1]
                 pic_save(base_code, ASIN)
         except:
-            pass
-
+            print("{}图片保存出错，可能非base64形式数据".format(ASIN))
     time.sleep(3)
-    details_pd['pic_url'] = "E:\爬虫pycharm\data\pic\\" +  details_pd['ASIN'] + ".jpg"
-    details_pd['pic_table_url'] = '<table> <img src=' + '\"' +details_pd['pic_url'] + '\"' +'height="150" >'
-    file_name_new = "E:\爬虫pycharm\data\goods_detail\\" + aft + "_with_ad.xlsx"
-    details_pd.to_excel(file_name_new,  encoding='utf-8')
+    details_pd['pic_url'] = r"..\data\pic\\" + details_pd['ASIN'] + ".jpg"
+    details_pd['pic_table_url'] = '<table> <img src=' + '\"' + details_pd['pic_url'] + '\"' + 'height="150" >'
+    file_name_new = r"..\data\goods_detail\\" + aft + "_with_ad.xlsx"
+    details_pd.to_excel(file_name_new, encoding='utf-8')
+
+
+if __name__ == '__main__':
+    data_file = r'E:\产品开发\prime day 数据\终版\日本多类目数据.xlsx'
+    main(data_file=data_file)

@@ -3,6 +3,7 @@ import pandas as pd
 import requests, lxml
 from lxml import etree
 import re, time, random, datetime
+import urllib
 
 
 class AmazonGoods:
@@ -18,11 +19,10 @@ class AmazonGoods:
     url_base = "https://www.amazon.com"
     s = requests.Session()
     s.headers.update(headers)
-    s.get(url=url_base, headers=headers)
+    s.get(url=url_base)
 
     def __init__(self):
         self.goods_list = []
-
 
     def get_goods(self, url):
 
@@ -33,19 +33,19 @@ class AmazonGoods:
             return
         print(url)
         res_html = res.text
+        # with open(r'测试.html', 'w') as f:
+        #     f.write(res_html)
+        # print(res_html.title())
         html = etree.HTML(res_html)
 
         # 自然排名和广告排名
-        con_list = html.xpath('//div[@class="sg-col-4-of-24 sg-col-4-of-12 sg-col-4-of-36 s-result-item sg-col-4-of-28'
-                              ' sg-col-4-of-16 sg-col sg-col-4-of-20 sg-col-4-of-32"]')
-        ad_con_list = html.xpath('//div[@class="sg-col-4-of-24 sg-col-4-of-12 sg-col-4-of-36 s-result-item '
-                                 'sg-col-4-of-28 sg-col-4-of-16 AdHolder sg-col sg-col-4-of-20 sg-col-4-of-32"]')
+        con_list = html.xpath('//div[@class="sg-col-4-of-24 sg-col-4-of-12 sg-col-4-of-36 s-result-item sg-col-4-of-28 sg-col-4-of-16 sg-col sg-col-4-of-20 sg-col-4-of-32"]')
+        print("共有自然商品：{}个".format(str(len(con_list))))
+        ad_con_list = html.xpath('//div[@class="sg-col-4-of-24 sg-col-4-of-12 sg-col-4-of-36 s-result-item sg-col-4-of-28 sg-col-4-of-16 AdHolder sg-col sg-col-4-of-20 sg-col-4-of-32"]')
         all_goods_list = con_list + ad_con_list
 
-
         for each in all_goods_list:
-
-            if  each in ad_con_list:
+            if each in ad_con_list:
                 ad_plus = 1
             else:
                 ad_plus = 0
@@ -55,7 +55,10 @@ class AmazonGoods:
             #  goods_title_handle(goods_title)
             # 商品链接
             goods_url = each.xpath(".//a[@class='a-link-normal a-text-normal']/@href")
-            goods_url_full = "https://www.amazon.com" + goods_url[0]
+            try:
+                goods_url_full = "https://www.amazon.com" + goods_url[0].split('ref')[0]
+            except:
+                goods_url_full = "https://www.amazon.com" + goods_url[0]
 
             # 图片链接
             #             goods_pic_url = each.xpath(".//img/@src")[0]
@@ -91,21 +94,20 @@ class AmazonGoods:
 
 if __name__ == '__main__':
 
-    data_path = r'..\data\\'
+
     goods = AmazonGoods()
-    key_words = "weight blanket for kids"
+    key_words = "wind chimes"
     for page in range(1, 3):
         if page == 1:
-            url = "https://www.amazon.com/s?k=" + key_words
+            url = "https://www.amazon.com/s?k=" + urllib.parse.quote(key_words)
             goods.get_goods(url)
-            time.sleep(random.uniform(1.2,2.4))
+            time.sleep(random.uniform(1.2, 2.4))
         else:
-            url = "https://www.amazon.com/s?k=" + key_words + "&page=" + str(page)
+            url = "https://www.amazon.com/s?k=" + urllib.parse.quote(key_words) + "&page=" + str(page)
             goods.get_goods(url)
-            time.sleep(random.uniform(1.2,2.4))
-        # print("page-%d-finish" % page)
+            time.sleep(random.uniform(1.2, 2.4))
         time.sleep(random.random())
     goods_pd = pd.DataFrame(goods.goods_list, columns=['goods_title', 'goods_url_full', 'price_whole', 'price_fraction', 'ad_plus', 'reviews'])
     aft = datetime.datetime.now().strftime('%m%d%H%M')
-    file_name = data_path + "goods_rank_list/" + key_words + "-" + aft + "_with_ad.csv"
+    file_name = r"..\data\goods_rank_list/" + key_words + "_" + aft + "_with_ad.csv"
     goods_pd.to_csv(file_name, encoding='utf-8')

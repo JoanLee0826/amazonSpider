@@ -1,11 +1,10 @@
 import pandas as pd
-import numpy as np
 import requests
 from lxml import etree
 import re, time, random, datetime
 from queue import Queue
 import threading
-import  sys
+
 
 class Review:
 
@@ -17,6 +16,7 @@ class Review:
     proxies = {
         "http": "http://117.91.131.74:9999",
     }
+
     def __init__(self, domain):
         self.view_list = []
         self.page_list = []
@@ -24,7 +24,7 @@ class Review:
 
         if domain.strip().lower() == 'jp':
             self.row_url = "https://www.amazon.co.jp"
-        else:
+        elif domain.strip().lower == 'com':
             self.row_url = "https://www.amazon.com"
 
         self.s = requests.Session()
@@ -57,20 +57,29 @@ class Review:
             view_format = each_view.xpath('.//a[@data-hook="format-strip"]/text()')
             view_colour = None
             view_size = None
-            for each in view_format:
-                if re.search("color", each, re.I) or re.search("colour", each, re.I):
-                    view_colour = each.split(':')[1].strip()
-                if re.search("size", each, re.I) or re.search('style', each, re.I):
-                    view_size = each.split(":")[1].strip()
+            try:
+                for each in view_format:
+                    if re.search("color|colour|色", each, re.I):
+                        view_colour = each.split(':')[1].strip()
+                    if re.search("size|style|サイズ", each, re.I):
+                        view_size = each.split(":")[1].strip()
+            except:
+                pass
             # 评价内容
             view_body = each_view.xpath('string(.//span[@data-hook="review-body"]/span)')
-
             # 评价有用数量
             try:
                 view_useful_raw = each_view.xpath('.//span[@data-hook="helpful-vote-statement"]/text()')[0]
                 view_useful = view_useful_raw.split(' ')[0]
+                if view_useful == 'one':
+                    view_useful = 1
+                try:
+                    view_useful = int(view_useful)
+                except:
+                    pass
             except:
-                view_useful = '0'
+                view_useful = 0
+
             # 商品的评价信息表
             each_view_list = [view_goods, view_name, view_star, view_title, view_date, view_colour, view_size,
                               view_body, view_useful]
@@ -79,22 +88,20 @@ class Review:
 
     def run(self, data):
         goods_data = pd.read_excel(data, encoding='utf-8')
-        base_url =  self.row_url + "/product-reviews/"
+        base_url = self.row_url + "/product-reviews/"
         # goods_data.drop_duplicates(subset=['r','评价数量'],inplace=True)
-        # goods_data = goods_data['classfication'] == ''
-        for  each_url, each_count in zip(goods_data['ASIN'][28:30], goods_data['goods_review_count'][28:30]):
-            if each_url and int(each_count) > 0:
+        for each_asin, each_count in zip(goods_data['ASIN'][5:50], goods_data['goods_review_count'][5:50]):
+            if each_asin and int(each_count) > 0:
                 if int(each_count) % 10 == 0:
-
                     end_page = int(each_count) // 10 + 1
                 else:
                     end_page = int(each_count) // 10 + 2
 
                 for page in range(1, end_page):
                     if page == 1:
-                        url = base_url + each_url
+                        url = base_url + each_asin
                     else:
-                        url = base_url + each_url + '?pageNumber=' + str(page)
+                        url = base_url + each_asin + '?pageNumber=' + str(page)
                     self.url_queue.put(url)
                     print("review_page_%d" % page, url)
 
@@ -106,7 +113,7 @@ class Review:
                                   for m in range(30) if not self.url_queue.empty()]
                 for each in review_threads:
                     each.start()
-                print("队列剩余数量",self.url_queue.qsize())
+                print("队列剩余数量", self.url_queue.qsize())
 
                 for each in review_threads:
                     each.join()
@@ -114,7 +121,6 @@ class Review:
                 print("请求链接出错，重试中...")
                 pass
             time.sleep(random.uniform(0.5,2.1))
-
             if self.url_queue.empty():
                 break
 
@@ -122,16 +128,14 @@ class Review:
                                      columns=['review_goods', 'review_name', 'review_star', 'review_title',
                                               'review_date', 'review_colour', 'review_size', 'review_body',
                                               'review_useful'])
-        view_goods_pd.drop_duplicates(subset=['review_name','review_date','review_body'],inplace=True)
+        view_goods_pd.drop_duplicates(subset=['review_name', 'review_date','review_body'], inplace=True)
         aft = datetime.datetime.now().strftime('%m%d%H%M')
-        file_name = 'E:\爬虫pycharm\data\goods_review\\' + "reviews-" + aft + ".xlsx"
+        file_name = r'../data/goods_review/' + "reviews_" + aft + ".xlsx"
         view_goods_pd.to_excel(file_name, encoding='utf-8', engine='xlsxwriter')
-        print("共获取评论数量：",len(self.view_list))
-
+        print("共获取评论数量：", len(self.view_list))
 
 
 if __name__ == '__main__':
-
 
     data = r"../data/category/Kid's Weighted Blankets_08_28_13_22.xlsx"
     review = Review(domain='com')

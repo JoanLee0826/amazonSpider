@@ -6,8 +6,29 @@ import re, time, random, datetime
 import pymysql
 import os
 
+head_user_agent = ['Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko',
+                       'Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/28.0.1500.95 Safari/537.36',
+                       'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; .NET4.0C; rv:11.0) like Gecko)',
+                       'Mozilla/5.0 (Windows; U; Windows NT 5.2) Gecko/2008070208 Firefox/3.0.1',
+                       'Mozilla/5.0 (Windows; U; Windows NT 5.1) Gecko/20070309 Firefox/2.0.0.3',
+                       'Mozilla/5.0 (Windows; U; Windows NT 5.1) Gecko/20070803 Firefox/1.5.0.12',
+                       'Opera/9.27 (Windows NT 5.2; U; zh-cn)',
+                       'Mozilla/5.0 (Macintosh; PPC Mac OS X; U; en) Opera 8.0',
+                       'Opera/8.0 (Macintosh; PPC Mac OS X; U; en)',
+                       'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.12) Gecko/20080219 Firefox/2.0.0.12 Navigator/9.0.0.6',
+                       'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Win64; x64; Trident/4.0)',
+                       'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; Trident/4.0)',
+                       'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.2; .NET4.0C; .NET4.0E)',
+                       'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Maxthon/4.0.6.2000 Chrome/26.0.1410.43 Safari/537.1 ',
+                       'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.2; .NET4.0C; .NET4.0E; QQBrowser/7.3.9825.400)',
+                       'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:21.0) Gecko/20100101 Firefox/21.0 ',
+                       'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.1 (KHTML, like Gecko) Chrome/21.0.1180.92 Safari/537.1 LBBROWSER',
+                       'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0; BIDUBrowser 2.x)',
+                       'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.11 (KHTML, like Gecko) Chrome/20.0.1132.11 TaoBrowser/3.0 Safari/536.11']
+
+
 def weight_handle(weight):
-    # 把kg ounce pound 都转化为数字存储
+    # 把kg g 都转化为数字存储
     weight = weight.lower().replace(',', '')
     if re.search("kg", weight):
         weight_int = float(weight.split(' ')[0]) * 1000
@@ -34,7 +55,6 @@ def feature_handle(feature):
 
 
 def seller_handle(seller):
-    # 卖家类型识别
     if not seller:
         return None
     else:
@@ -47,8 +67,6 @@ def seller_handle(seller):
 
 
 def get_sales(rank, cate="Home & Kitchen"):
-
-    # 根据 amzscount算法接口，基于类目排名进行销量预估
     import requests
     import urllib
     s = requests.Session()
@@ -56,10 +74,10 @@ def get_sales(rank, cate="Home & Kitchen"):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36",
     }
     sales_url = "https://amzscout.net/extensions/scoutlite/v1/sales?"
-    full_url = sales_url + "domain=COM&category="+ urllib.parse.quote(cate)+ "&rank=" + str(rank)
+    full_url = sales_url + "domain=COM&category=" + urllib.parse.quote(cate)+ "&rank=" + str(rank)
     print(full_url)
     s.headers.update(row_headers)
-    res = s.get(full_url)
+    res = s.get(full_url, timeout=10)
     try:
         return res.json().get('sales')
     except:
@@ -68,6 +86,7 @@ def get_sales(rank, cate="Home & Kitchen"):
 
 class GoodDetail:
     headers = {
+        # "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.81 Safari/537.36"
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0"
     }
 
@@ -79,7 +98,8 @@ class GoodDetail:
 
     conn = pymysql.connect(host='localhost', port=3306, db='amazon_test', user='root', passwd='1118')
     s = requests.Session()
-    s.get(url=url_base, headers=headers, verify=False)
+    s.headers.update({'User-Agent': random.choice(head_user_agent)})
+    s.get(url=url_base, verify=False)
 
     def __init__(self):
         self.detail_list = []
@@ -115,11 +135,10 @@ class GoodDetail:
             print("try again")
             self.begin += 1
             if self.begin >= 5:
-                print('该链接:' + url + '访问出错次数超过5次,可能该链接下没有同类商品内容')
+                print('该链接:' + url + '访问出错次数超过5次, 请手动尝试添加')
                 return
             self.get_detail(url)
 
-        print(self.begin)
         self.begin = 0
         # 类别
         kinds = res_html.xpath("//div[@class='twisterTextDiv text']/span[@class='a-size-base' and 1]/text()")[:]
@@ -255,9 +274,9 @@ class GoodDetail:
         ASIN = item.get('ASIN', None)
 
         try:
-            multi_asin = set(sort_list.append(ASIN))
+            multi_asin = list(set(sort_list.append(ASIN)))
         except:
-            multi_asin = set(sort_list)
+            multi_asin = list(set(sort_list))
         print("-----------")
         print(multi_asin)
         print("-----------")
@@ -265,6 +284,8 @@ class GoodDetail:
         package_dimensions = item.get('Package Dimensions', None)
         product_weight = item.get('Item Weight', None)
         date_on_shelf = item.get('Date first listed on Amazon', None)
+        if not date_on_shelf:
+            date_on_shelf = item.get('date_on_shelf', None)
 
         if product_weight:
             product_weight = weight_handle(product_weight)
@@ -272,14 +293,13 @@ class GoodDetail:
         if ship_weight:
             ship_weight = weight_handle(ship_weight)
 
-
         feature_list = res_html.xpath("//div[@id='feature-bullets']/ul/li/span/text()")
         features = []
         for feature in feature_list:
             feature = feature.strip()
             features.append(feature)
 
-        rank_in_HK = None
+        rank_in_hk = None
         goods_ranks = item.get('raw_goods_rank', None)
         goods_each_ranks = goods_ranks
         print(goods_ranks)
@@ -315,9 +335,9 @@ class GoodDetail:
                 goods_each_ranks[goods_rank_sort.strip()] = goods_rank_num
                 if re.search('Home & Kitchen', goods_rank_sort):
                     try:
-                        rank_in_HK = int(goods_rank_num)
+                        rank_in_hk = int(goods_rank_num)
                     except:
-                        rank_in_HK = None
+                        rank_in_hk = None
 
             self.rank_list.append(goods_each_ranks)
             print(self.rank_list[-1])
@@ -328,7 +348,7 @@ class GoodDetail:
                 rank_main = int(list(self.rank_list[-1].values())[0])
             except:
                 category_main, rank_main = None, None
-            print(category_main, rank_main)
+            # print(category_main, rank_main)
         # 评价数量
         try:
             goods_review_count = res_html.xpath('//div[@id="averageCustomerReviews"]//span[@id="acrCustomerReviewText"]/text()')[0]
@@ -375,7 +395,6 @@ class GoodDetail:
                     seller = seller.replace("\n", "").split("Reviews")[0].strip()
                 except:
                     seller = None
-
         except:
             seller = None
 
@@ -384,43 +403,50 @@ class GoodDetail:
         except:
             seller_cls = None
 
-        # 销量修正，实际反馈发现，销量预测头部偏高，中部偏低，做出微调
-        # 基于类目排名的销量预测，用时间点来计算计算时间段，不准确，虽然平均排名似乎能解决问题
-        # 但同时因为无法识别ASIN合并分割等带来的问题，仅仅作为粗略参考，或者相对比较。
+        seller_name, seller_months, selelr_review_count = None, None, None
+        if seller_cls == 'FBA' or 'FBM':
+            try:
+                seller_href = res_html.xpath("//div[@id='merchant-info']/a[1]/@href")[0]
+                seller_url = "https://www.amazon.com" + seller_href
+                seller_name, seller_months, selelr_review_count = seller_check(seller_url)
+            except:
+                pass
         sales_est = None
         if category_main and rank_main:
+            print(category_main, rank_main, '销量预测中...')
             try:
                 sales_est = int(get_sales(cate=category_main, rank=rank_main))
                 # if sales_est >= 2000:
-                #     sales_est = int(sales_est*0.9)
+                #     sales_est = int(sales_est*1)
                 # elif sales_est >= 1000:
-                #     sales_est = int(sales_est*1.25)
+                #     sales_est = int(sales_est*1.15)
                 # else:
-                #     sales_est = int(sales_est*1.5)
-                # time.sleep(1)
-                print("sales:", sales_est)
+                #     sales_est = int(sales_est*1.25)
+                # time.sleep(random.random())
+                # print("sales:",sales_est)
             except:
-                print('{}{}排名处未能正确返回销量，如果持续出现请测试销量预测接口功能'.format(category_main, rank_main))
+                print(ASIN,'查询销量出错')
                 pass
 
-        each_detail_list = (goods_pic_url,goods_title, ASIN, brand, ad_plus, goods_price, choose_kind, seller, seller_cls,
-                            rank_in_HK, date_on_shelf, stockOnHand, goods_review_count,product_dimensions,package_dimensions,
-                            product_weight, ship_weight, goods_review_star, category_main, rank_main, sales_est, high_fre_words ,multi_asin, goods_each_ranks)
+        each_detail_list = (goods_pic_url,goods_title, ASIN, brand, ad_plus, goods_price, choose_kind,
+                            seller, seller_cls, seller_name, seller_months, selelr_review_count,
+                            rank_in_hk, date_on_shelf, stockOnHand, goods_review_count,product_dimensions,
+                            package_dimensions,product_weight, ship_weight, goods_review_star, category_main,
+                            rank_main, sales_est, high_fre_words, multi_asin, goods_each_ranks)
 
         if goods_title:
             self.detail_list.append(each_detail_list)
 
-        # 写入数据库, 比较糙，别见怪
         if ASIN:
             # try:
             cs = self.conn.cursor()
-            cs.execute('select * from amazon_test.goods_detail where goods_detail.ASIN=(%s)',ASIN)
+            cs.execute('select * from amazon_test.goods_detail where goods_detail.ASIN=(%s)', ASIN)
             result = cs.fetchone()
             if result:
                 update_sql = 'update goods_detail set rank_in_HK=(%s), goods_review_count=(%s),goods_review_star=(%s), ' \
                              'category_main=(%s), rank_main=(%s), goods_price=(%s), seller_cls=(%s), sales_est=(%s), high_fre_words=(%s)' \
                              'where ASIN=(%s)'
-                count = cs.execute(update_sql, (rank_in_HK, goods_review_count, goods_review_star, category_main, rank_main,
+                count = cs.execute(update_sql, (rank_in_hk, goods_review_count, goods_review_star, category_main, rank_main,
                                                 goods_price, seller_cls, sales_est, str(high_fre_words), ASIN))
                 self.conn.commit()
                 print(count, "ASIN已存在，更新完毕")
@@ -439,17 +465,23 @@ class GoodDetail:
                     sql_ranks = json.dumps(goods_each_ranks)
                 else:
                     sql_ranks = ""
-                print(type(rank_main))
                 count = cs.execute(insert_sql, (goods_pic_url,goods_title, ASIN, brand, goods_price, seller_cls,
-                             category_main, rank_main, sales_est, rank_in_HK, date_on_shelf, goods_review_count, goods_review_star,
+                             category_main, rank_main, sales_est, rank_in_hk, date_on_shelf, goods_review_count, goods_review_star,
                             product_dimensions, package_dimensions, product_weight, ship_weight, sql_ranks, str(high_fre_words)))
-                self.conn.commit()
+
+                try:
+                    self.conn.commit()
+                except:
+                    self.conn.rollback()
                 # print(goods_each_ranks)
                 print(count, "ASIN已添加")
+
                 cs.execute('select count(*) from amazon_test.goods_detail')
+
                 result = cs.fetchall()
                 print(result)
                 cs.close()
+
 
 def pic_save(base_code, ASIN):
 
@@ -460,35 +492,72 @@ def pic_save(base_code, ASIN):
         file.close()
 
 
-if __name__ == '__main__':
+def seller_check(url):
+    print("卖家年评论数获取中...")
+    s = requests.Session()
+    s.headers.update({'User-Agent': random.choice(head_user_agent)})
+    res = s.get(url)
+    if res.status_code != 200:
+        print('{}卖家信息查询出错'.format(url))
+        return None
+    res_html = etree.HTML(res.text)
 
+    seller_name, seller_months, seller_count = None, None, None
+    try:
+        seller_name = res_html.xpath("//h1[@id='sellerName']/text()")[0]
+    except:
+        pass
+
+    try:
+        seller_review_str = res_html.xpath("//a[@class='a-link-normal feedback-detail-description']/text()")[0]
+    except:
+        return
+
+    try:
+        count_patt = re.compile('in the last (.*) months \((.*) ratings\)')
+        a, b = re.search(count_patt, seller_review_str).groups()
+        seller_months, seller_count = int(a), int(b)
+    except:
+        pass
+
+    if not seller_count:
+        try:
+            another_patt = re.compile('(\d+) total ratings\)')
+            seller_months = 0
+            seller_count = int(re.search(another_patt, seller_review_str).group(1))
+        except:
+            pass
+
+    return seller_name, seller_months, seller_count
+
+
+def main(file_path):
     goods_detail = GoodDetail()
-    data_file = r"../data/category/Crib Bedding Sets_08_29_12_37.xlsx"
-    # data_file = r'../data/goods_rank_list/sweatshirt blanket-08201239_with_ad.csv'
-    # data = pd.read_csv(data_file)
-    # data = pd.read_excel(data_file, encoding='utf-8', sheet_name='筛选数据')
 
-    # for url in data['goods_url_full'][:61]:
-    #     if url:
-    #         print(url)
-    #         goods_detail.get_detail(url)
-    #         time.sleep(random.uniform(1.2,2.5))
-
-    data = pd.read_excel(data_file, encoding='utf-8')
-
-    for ASIN in data['ASIN']:
-        if ASIN:
-            url = "https://www.amazon.com/dp/" + str(ASIN)
-            print(url)
-            goods_detail.get_detail(url)
-            time.sleep(random.uniform(1.2, 2.5))
+    if file_path.endswith('csv'):
+        data = pd.read_csv(file_path)
+        for url in data['goods_url_full'][20:30]:
+            if url:
+                print(url)
+                goods_detail.get_detail(url)
+                time.sleep(random.random())
+    if file_path.endswith('xlsx'):
+        data = pd.read_excel(file_path, encoding='utf-8')
+        for ASIN in data['ASIN']:
+            if ASIN:
+                url = "https://www.amazon.com/dp/" + str(ASIN)
+                print(url)
+                goods_detail.get_detail(url)
+                time.sleep(random.random())
 
     details_pd = pd.DataFrame(goods_detail.detail_list,
                               columns=['goods_pic_url', 'goods_title', 'ASIN', 'brand', 'ad_plus', 'goods_price',
-                                       'choose_kind','seller', 'seller_cls','rank_in_HK', 'date_on_shelf','stockOnHand', 'goods_review_count',
-                                       'product_dimensions', 'package_dimensions','product_weight', 'ship_weight',
-                                       'goods_review_star','category_main', 'rank_main', 'sales_est', 'high_fre_words','multi_asin','goods_each_ranks'])
-    ranks_pd = pd.DataFrame(goods_detail.rank_list)
+                                       'choose_kind', 'seller', 'seller_cls', 'seller_name', 'seller_months',
+                                       'selelr_review_count', 'rank_in_HK', 'date_on_shelf', 'stockOnHand',
+                                       'goods_review_count', 'product_dimensions', 'package_dimensions',
+                                       'product_weight', 'ship_weight', 'goods_review_star', 'category_main',
+                                       'rank_main', 'sales_est', 'high_fre_words', 'multi_asin', 'goods_each_ranks'])
+    # ranks_pd = pd.DataFrame(goods_detail.rank_list)
     aft = datetime.datetime.now().strftime('%m%d%H%M')
 
     for base_code_full, ASIN in zip(details_pd['goods_pic_url'], details_pd['ASIN']):
@@ -496,25 +565,22 @@ if __name__ == '__main__':
             if base_code_full:
                 base_code = base_code_full.split(',')[1]
                 pic_save(base_code, ASIN)
-            else:
-                print("{}对应的图片格式非常规base64形式，图片保存出错".format(ASIN))
         except:
-            pass
+            print("保存图片出错")
 
     time.sleep(3)
 
     # abs_path为项目的跟路径，相当于域
     abs_path = os.path.abspath('../')
     details_pd['pic_url'] = abs_path + r"\data\pic\\" + details_pd['ASIN'] + ".jpg"
-
-    # 添加适用于Excel快速填充图片的辅助列，无其他处理作用
     details_pd['pic_table_url'] = '<table> <img src=' + '\"' + details_pd['pic_url'] + '\"' + 'height="140" >'
     file_name_new = r"..\data\goods_detail\\" + aft + "_with_ad.xlsx"
-    last_pd = pd.concat([details_pd, ranks_pd], axis=1)
+    # last_pd = pd.concat([details_pd, ranks_pd], axis=1)
+    details_pd.drop_duplicates(subset=['category_main', 'rank_main'], inplace=True)
+    details_pd.to_excel(file_name_new, encoding='utf-8', engine='xlsxwriter')
 
-    # 删除排名相同的商品
-    last_pd.drop_duplicates(subset=['category_main','rank_main'], inplace=True)
 
-    # engine选择xlsxwriter可以解决Excel表格单个表格内字符串长度限制问题，不添加，base64图片值这一列无法输出到Excel中，它太长了
-    last_pd.to_excel(file_name_new,  encoding='utf-8', engine='xlsxwriter')
+if __name__ == '__main__':
+    file_path = r'../data/goods_rank_list/milestone blanket_11191743_with_ad.csv'
+    main(file_path=file_path)
 
