@@ -5,7 +5,7 @@ import time
 from dateutil.parser import parse
 import keepa
 
-ACCESSKEY = '7sommorss711l4ci5f3n97ftgvcq8jm7tak3316h3a61jkifqq3qh3keebkm9rsl'
+ACCESSKEY = ''
 k_api = keepa.Keepa(ACCESSKEY)
 
 
